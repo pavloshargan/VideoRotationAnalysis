@@ -1,0 +1,25 @@
+# .gitignore
+
+# Directories
+dist/
+build/
+*.egg-info/
+
+# Optional: Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Optional: macOS folder attributes
+.DS_Store
+
+# Optional: Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Optional: Linux file folder
+.directory
+
+# Optional: Temporary files
+*.tmp
+

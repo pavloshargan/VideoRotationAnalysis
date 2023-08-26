@@ -12,5 +12,8 @@ ffmpeg is required <br>
 
 ## Usage: <br>
 ```
-python3 example.py <path to video>
+from videorotation import VideoRotationAnalysis
+with VideoRotationAnalysis(frames_per_video=12) as analysis:
+    result, angles = analysis.check_if_upsidedown_for_video(video_path)
+    print((result,angles))
 ```
