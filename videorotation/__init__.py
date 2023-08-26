@@ -1,1 +1,1 @@
-from check_upsidedown import VideoRotationAnalysis
+from .check_upsidedown import VideoRotationAnalysis

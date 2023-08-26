@@ -5,15 +5,23 @@ import tensorflow as tf
 import subprocess
 import time
 import tempfile
+import pkg_resources
 
 class VideoRotationAnalysis:
 
-    MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rotnet_street_view_resnet50_keras2_pb")
+    MODEL_PATH = pkg_resources.resource_filename('videorotation', 'rotnet_street_view_resnet50_keras2_pb')
 
     def __init__(self, frames_per_video=12):
         self.model_location = tf.saved_model.load(self.MODEL_PATH)
         self.model = self.model_location.signatures["serving_default"]
         self.frames_per_video = frames_per_video
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Unload the model by setting it to None
+        self.model = None
 
     @staticmethod
     def cmd(command):
@@ -84,11 +92,3 @@ class VideoRotationAnalysis:
             predicted_angles = self.predict_angle(frame_paths)
             print("predict: ", time.time()-time_s)
             return self.is_mostly_upside_down(predicted_angles), predicted_angles
-
-if __name__ == '__main__':
-    video_paths = [os.path.join("test_video1", x) for x in os.listdir("test_video1")]
-    analyzer = VideoRotationAnalysis()
-
-    for video in video_paths:
-        is_upside_down, angles = analyzer.check_if_upsidedown_for_video(video)
-        print(f"Video: {video} - Predicted Angles: {', '.join(map(str, angles))} - Mostly upside down: {is_upside_down}")
