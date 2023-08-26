@@ -1,4 +1,4 @@
-# VideoRotation estimation using RotNet cnn, ref: https://github.com/d4nst/RotNet <br>
+### VideoRotation estimation using RotNet cnn, ref: https://github.com/d4nst/RotNet <br>
 
 
 ## Setup: <br>
