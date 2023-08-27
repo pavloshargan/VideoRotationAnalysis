@@ -8,20 +8,25 @@ import tempfile
 import pkg_resources
 
 class VideoRotationAnalysis:
+    MODEL_PATH = pkg_resources.resource_filename('videorotation', 'mobilenet2_bi-rotnet.tflite')
 
-    MODEL_PATH = pkg_resources.resource_filename('videorotation', 'rotnet_street_view_resnet50_keras2_pb')
+    def __init__(self, frames_per_video=12, frames_threshold=8):
+        self.interpreter = tf.lite.Interpreter(model_path=self.MODEL_PATH)
+        self.interpreter.allocate_tensors()
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
 
-    def __init__(self, frames_per_video=12):
-        self.model_location = tf.saved_model.load(self.MODEL_PATH)
-        self.model = self.model_location.signatures["serving_default"]
         self.frames_per_video = frames_per_video
+        self.frames_threshold = frames_threshold
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Unload the model by setting it to None
-        self.model = None
+        self.interpreter = None
+        self.input_details = None
+        self.output_details = None
 
     @staticmethod
     def cmd(command):
@@ -32,41 +37,6 @@ class VideoRotationAnalysis:
         )
         return response
 
-    @staticmethod
-    def keras_imagenet_caffe_preprocess(x):
-        if not issubclass(x.dtype.type, np.floating):
-            x = x.astype(np.float32, copy=False)
-
-        x = x[..., ::-1]
-        mean = [103.939, 116.779, 123.68]
-
-        for i in range(3):
-            x[..., i] -= mean[i]
-
-        return x
-
-    def preprocess_image(self, image_path, target_size=(224, 224)):
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, target_size)
-        image = np.expand_dims(image, axis=0)
-        return self.keras_imagenet_caffe_preprocess(image)
-
-    def predict_angle(self, paths):
-        result = []
-        for path in paths:
-            image_tensor = self.preprocess_image(path)
-            output = self.model(tf.convert_to_tensor(image_tensor))
-
-            if isinstance(output, dict):
-                batch_predictions = output['fc360'].numpy()
-            else:
-                batch_predictions = output.numpy()
-
-            predicted_angle = np.argmax(batch_predictions, axis=1)[0]
-            result.append(predicted_angle)
-
-        return result
 
     def extract_and_save_frames_for_video(self, video, temp_dir):
         frame_paths = []
@@ -79,9 +49,22 @@ class VideoRotationAnalysis:
             frame_paths.append(frame_path)
         return frame_paths
 
-    def is_mostly_upside_down(self, angles):
-        count_in_range = sum(1 for angle in angles if 150 <= angle <= 210)
-        return count_in_range >= (self.frames_per_video//3)
+    def is_flipped(self, image_path):
+        # Open and preprocess the image using OpenCV
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert from BGR to RGB
+        image = cv2.resize(image, (256, 256))
+        image = image / 255.0  # Normalizing to [0,1]
+        image = image.astype(np.float32)
+        image = np.expand_dims(image, axis=0)
+
+        # Make prediction
+        self.interpreter.set_tensor(self.input_details[0]['index'], image)
+        self.interpreter.invoke()
+        prediction = self.interpreter.get_tensor(self.output_details[0]['index'])
+
+        # Assuming label 1 indicates the flipped class
+        return bool(np.argmax(prediction))
 
     def check_if_upsidedown_for_video(self, video):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -89,6 +72,10 @@ class VideoRotationAnalysis:
             frame_paths = self.extract_and_save_frames_for_video(video, temp_dir)
             print("extract: ", time.time()-time_s)
             time_s = time.time()
-            predicted_angles = self.predict_angle(frame_paths)
+            result = []
+            for path in frame_paths:
+                flipped = self.is_flipped(path)
+                result.append(flipped)
             print("predict: ", time.time()-time_s)
-            return self.is_mostly_upside_down(predicted_angles), predicted_angles
+
+            return sum(1 for x in result if x) >= self.frames_threshold
